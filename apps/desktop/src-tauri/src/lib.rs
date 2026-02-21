@@ -6,6 +6,26 @@ use std::process::Command;
 use std::sync::Mutex;
 use tauri::Manager;
 
+#[cfg(target_os = "macos")]
+fn set_macos_app_icon() {
+    use objc2::{AnyThread, MainThreadMarker};
+    use objc2_foundation::NSData;
+    use objc2_app_kit::{NSApplication, NSImage};
+
+    let icon_bytes = include_bytes!("../icons/icon.png");
+
+    // We're in the setup callback which runs on the main thread
+    if let Some(mtm) = MainThreadMarker::new() {
+        unsafe {
+            let data = NSData::with_bytes(icon_bytes);
+            if let Some(image) = NSImage::initWithData(NSImage::alloc(), &data) {
+                let app = NSApplication::sharedApplication(mtm);
+                app.setApplicationIconImage(Some(&image));
+            }
+        }
+    }
+}
+
 struct SidecarState {
     child: Option<std::process::Child>,
 }
@@ -49,6 +69,10 @@ pub fn run() {
         .manage(claude::ClaudeProcessState::default())
         .manage(zotero::ZoteroOAuthState::default())
         .setup(|app| {
+            // Set macOS Dock icon (dev mode doesn't use bundle, so set it at runtime)
+            #[cfg(target_os = "macos")]
+            set_macos_app_icon();
+
             // In dev mode, the sidecar is started separately (via pnpm dev:desktop)
             // In production, start the sidecar from the bundled resources
             let sidecar_path = if let Ok(path) = std::env::var("SIDECAR_PATH") {

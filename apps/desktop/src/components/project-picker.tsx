@@ -5,7 +5,6 @@ import {
   FolderPlusIcon,
   ClockIcon,
   XIcon,
-  FileTextIcon,
 } from "lucide-react";
 import { useProjectStore } from "@/stores/project-store";
 import { useDocumentStore } from "@/stores/document-store";
@@ -184,7 +183,7 @@ export function ProjectPicker() {
     <div className="flex h-full items-center justify-center bg-background">
       <div className="flex w-full max-w-md flex-col items-center gap-8 px-8">
         <div className="flex flex-col items-center gap-2">
-          <FileTextIcon className="size-12 text-primary" />
+          <img src="/icon-192.png" alt="ClaudePrism" className="size-16" />
           <h1 className="font-bold text-2xl">ClaudePrism</h1>
           <p className="text-center text-muted-foreground text-sm">
             AI-powered LaTeX writing workspace
