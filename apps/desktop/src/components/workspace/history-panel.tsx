@@ -127,8 +127,8 @@ export function HistoryPanel({ maxHeight }: { maxHeight?: string }) {
     }
   }, [projectRoot, isLoading, loadMoreSnapshots]);
 
-  // Double-click to show diff in editor
-  const handleDoubleClick = useCallback(
+  // Click to show diff in editor
+  const handleClick = useCallback(
     async (snap: SnapshotInfo) => {
       if (!projectRoot) return;
       // Toggle off if already reviewing this snapshot
@@ -146,6 +146,7 @@ export function HistoryPanel({ maxHeight }: { maxHeight?: string }) {
     },
     [projectRoot, linearSnapshots, reviewingSnapshot, loadDiff, startReview],
   );
+
 
   const handleRestore = useCallback(
     async (snapshotId: string) => {
@@ -178,7 +179,7 @@ export function HistoryPanel({ maxHeight }: { maxHeight?: string }) {
   if (!projectRoot) {
     return (
       <div className="flex flex-col items-center gap-2 px-3 py-4 text-center">
-        <p className="text-[11px] text-muted-foreground">Open a project to view history.</p>
+        <p className="text-xs text-muted-foreground">Open a project to view history.</p>
       </div>
     );
   }
@@ -186,18 +187,11 @@ export function HistoryPanel({ maxHeight }: { maxHeight?: string }) {
   return (
     <div className={cn("flex flex-col", maxHeight || "h-full")}>
       {/* Header */}
-      <div className="flex shrink-0 items-center justify-between border-b px-3 py-1.5">
+      <div className="flex shrink-0 items-center justify-between border-b px-3 py-2">
         <div className="flex items-center gap-2">
-          <HistoryIcon className="size-3.5 text-muted-foreground" />
-          <span className="font-medium text-xs">History</span>
+          <HistoryIcon className="size-4 text-muted-foreground" />
+          <span className="font-medium text-sm">History</span>
         </div>
-        <button
-          className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          onClick={() => projectRoot && loadSnapshots(projectRoot)}
-          title="Refresh"
-        >
-          <RotateCcwIcon className={cn("size-3.5", isLoading && "animate-spin")} />
-        </button>
       </div>
       <div
         ref={scrollRef}
@@ -205,7 +199,7 @@ export function HistoryPanel({ maxHeight }: { maxHeight?: string }) {
         onScroll={handleScroll}
       >
         {linearSnapshots.length === 0 && !isLoading ? (
-          <div className="px-3 py-4 text-center text-[11px] text-muted-foreground">
+          <div className="px-3 py-4 text-center text-xs text-muted-foreground">
             No history yet
           </div>
         ) : (
@@ -216,7 +210,7 @@ export function HistoryPanel({ maxHeight }: { maxHeight?: string }) {
                 snapshot={snap}
                 isSelected={reviewingSnapshot?.id === snap.id}
                 isRestoring={isRestoring}
-                onDoubleClick={() => handleDoubleClick(snap)}
+                onClick={() => handleClick(snap)}
                 onRestore={() => handleRestore(snap.id)}
                 onAddLabel={() => openLabelDialog(snap.id)}
                 onRemoveLabel={(label) => projectRoot && removeLabel(projectRoot, label)}
@@ -264,7 +258,7 @@ function SnapshotRow({
   snapshot,
   isSelected,
   isRestoring,
-  onDoubleClick,
+  onClick,
   onRestore,
   onAddLabel,
   onRemoveLabel,
@@ -273,7 +267,7 @@ function SnapshotRow({
   snapshot: SnapshotInfo;
   isSelected: boolean;
   isRestoring: boolean;
-  onDoubleClick: () => void;
+  onClick: () => void;
   onRestore: () => void;
   onAddLabel: () => void;
   onRemoveLabel: (label: string) => void;
@@ -286,22 +280,22 @@ function SnapshotRow({
       <ContextMenuTrigger asChild>
         <button
           className={cn(
-            "group flex w-full items-start px-2 py-1.5 text-left transition-colors",
+            "group flex w-full items-start px-2.5 py-2 text-left transition-colors",
             isSelected ? "bg-accent" : "hover:bg-accent/50",
           )}
-          onDoubleClick={onDoubleClick}
+          onClick={onClick}
         >
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1">
               <span
                 className={cn(
-                  "rounded px-1 py-px text-[10px] leading-tight",
+                  "rounded px-1.5 py-0.5 text-xs leading-tight font-medium",
                   snapshotTypeBadgeColor(snapshot.message),
                 )}
               >
                 {snapshotTypeLabel(snapshot.message)}
               </span>
-              <span className="text-[10px] text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 {formatRelativeTime(snapshot.timestamp)}
               </span>
             </div>
@@ -312,7 +306,7 @@ function SnapshotRow({
                 {snapshot.labels.map((label) => (
                   <span
                     key={label}
-                    className="inline-flex items-center gap-0.5 rounded bg-amber-500/15 px-1 py-px text-[10px] text-amber-600 dark:text-amber-400"
+                    className="inline-flex items-center gap-0.5 rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-600 dark:text-amber-400"
                   >
                     <TagIcon className="size-2" />
                     {label}
@@ -329,7 +323,7 @@ function SnapshotRow({
 
             {/* Changed files summary */}
             {hasFiles && (
-              <div className="mt-0.5 text-[10px] text-muted-foreground truncate">
+              <div className="mt-0.5 text-xs text-muted-foreground truncate">
                 {snapshot.changed_files.map((f) => f.split("/").pop()).join(", ")}
               </div>
             )}

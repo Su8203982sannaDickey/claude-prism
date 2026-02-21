@@ -441,48 +441,56 @@ export function PdfPreview() {
 
   return (
     <div ref={previewContainerRef} className="relative flex h-full flex-col bg-muted/50">
-      <div className="flex h-9 items-center justify-between border-border border-b bg-background px-2">
-        <div className="flex items-center gap-1.5">
+      <div className="flex h-10 items-center justify-between border-border border-b bg-background px-2">
+        <div className="flex items-center gap-1">
           {isSaving && (
-            <><LoaderIcon className="size-3.5 animate-spin text-muted-foreground" /><span className="text-muted-foreground text-xs">Saving...</span></>
+            <div className="flex items-center gap-1.5 rounded-md bg-muted/50 px-2 py-1">
+              <LoaderIcon className="size-3.5 animate-spin text-muted-foreground" />
+              <span className="text-muted-foreground text-xs font-medium">Saving...</span>
+            </div>
           )}
           {!isSaving && isCompiling && (
-            <><LoaderIcon className="size-3.5 animate-spin text-muted-foreground" /><span className="text-muted-foreground text-xs">Compiling...</span></>
+            <div className="flex items-center gap-1.5 rounded-md bg-muted/50 px-2 py-1">
+              <LoaderIcon className="size-3.5 animate-spin text-muted-foreground" />
+              <span className="text-muted-foreground text-xs font-medium">Compiling...</span>
+            </div>
           )}
           {!isSaving && !isCompiling && pdfData && (
-            <>
-              <span className="text-muted-foreground text-xs">Ready</span>
-              <Button variant="ghost" size="icon" className="size-6" onClick={handleCompile} disabled={!isTexActive}>
-                <RefreshCwIcon className="size-3.5" />
-              </Button>
-            </>
+            <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2.5 text-xs" onClick={handleCompile} disabled={!isTexActive}>
+              <RefreshCwIcon className="size-3.5" />
+              Recompile
+            </Button>
           )}
           {!isSaving && !isCompiling && compileError && (
-            <>
-              <span className="text-destructive text-xs">Error</span>
-              <Button variant="ghost" size="icon" className="size-6" onClick={handleCompile} disabled={!isTexActive}>
-                <RefreshCwIcon className="size-3.5" />
-              </Button>
-            </>
+            <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2.5 text-xs text-destructive hover:text-destructive" onClick={handleCompile} disabled={!isTexActive}>
+              <RefreshCwIcon className="size-3.5" />
+              Retry
+            </Button>
           )}
         </div>
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-1">
           {pdfData && (
             <>
-              <span className="mr-2 text-muted-foreground text-xs">{numPages} {numPages === 1 ? "page" : "pages"}</span>
-              <Button variant="ghost" size="icon" className="size-6" onClick={zoomOut} disabled={scale <= 0.25}><MinusIcon className="size-3.5" /></Button>
-              <Button variant="ghost" size="icon" className="size-6" onClick={zoomIn} disabled={scale >= 4}><PlusIcon className="size-3.5" /></Button>
+              <span className="mr-1.5 text-muted-foreground text-xs">{numPages} {numPages === 1 ? "page" : "pages"}</span>
+              <Button variant="ghost" size="icon" className="size-7" onClick={zoomOut} disabled={scale <= 0.25}><MinusIcon className="size-3.5" /></Button>
+              <Button variant="ghost" size="icon" className="size-7" onClick={zoomIn} disabled={scale >= 4}><PlusIcon className="size-3.5" /></Button>
               <Select value={scale.toString()} onValueChange={(v) => setScale(Number(v))}>
-                <SelectTrigger size="sm" className="h-6! w-auto text-xs"><SelectValue>{Math.round(scale * 100)}%</SelectValue></SelectTrigger>
+                <SelectTrigger size="sm" className="h-7! w-auto text-xs"><SelectValue>{Math.round(scale * 100)}%</SelectValue></SelectTrigger>
                 <SelectContent>{ZOOM_OPTIONS.map((opt) => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}</SelectContent>
               </Select>
-              <div className="mx-0.5 h-4 w-px bg-border" />
-              <Button variant="ghost" size="icon" className="size-6" onClick={handleDownload} title="Download PDF"><DownloadIcon className="size-3.5" /></Button>
+              <div className="mx-1 h-4 w-px bg-border" />
+              <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2.5 text-xs" onClick={handleDownload} title="Download PDF">
+                <DownloadIcon className="size-3.5" />
+                Export
+              </Button>
             </>
           )}
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon" className="size-6" title="History"><HistoryIcon className="size-3.5" /></Button>
+              <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2.5 text-xs" title="History">
+                <HistoryIcon className="size-3.5" />
+                History
+              </Button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-96">
               <HistoryPanel maxHeight="max-h-[32rem]" />
