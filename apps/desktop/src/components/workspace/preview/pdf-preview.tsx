@@ -8,6 +8,7 @@ import {
   MinusIcon,
   PlusIcon,
   DownloadIcon,
+  HistoryIcon,
   MousePointerClickIcon,
 } from "lucide-react";
 import { useDocumentStore } from "@/stores/document-store";
@@ -20,6 +21,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { HistoryPanel } from "@/components/workspace/history-panel";
 import { compileLatex, synctexEdit } from "@/lib/latex-compiler";
 import { SelectionToolbar, type ToolbarAction } from "@/components/workspace/editor/selection-toolbar";
 import type { PdfTextSelection } from "./pdf-viewer";
@@ -461,19 +464,29 @@ export function PdfPreview() {
             </>
           )}
         </div>
-        {pdfData && (
-          <div className="flex items-center gap-0.5">
-            <span className="mr-2 text-muted-foreground text-xs">{numPages} {numPages === 1 ? "page" : "pages"}</span>
-            <Button variant="ghost" size="icon" className="size-6" onClick={zoomOut} disabled={scale <= 0.25}><MinusIcon className="size-3.5" /></Button>
-            <Button variant="ghost" size="icon" className="size-6" onClick={zoomIn} disabled={scale >= 4}><PlusIcon className="size-3.5" /></Button>
-            <Select value={scale.toString()} onValueChange={(v) => setScale(Number(v))}>
-              <SelectTrigger size="sm" className="h-6! w-auto text-xs"><SelectValue>{Math.round(scale * 100)}%</SelectValue></SelectTrigger>
-              <SelectContent>{ZOOM_OPTIONS.map((opt) => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}</SelectContent>
-            </Select>
-            <div className="mx-0.5 h-4 w-px bg-border" />
-            <Button variant="ghost" size="icon" className="size-6" onClick={handleDownload} title="Download PDF"><DownloadIcon className="size-3.5" /></Button>
-          </div>
-        )}
+        <div className="flex items-center gap-0.5">
+          {pdfData && (
+            <>
+              <span className="mr-2 text-muted-foreground text-xs">{numPages} {numPages === 1 ? "page" : "pages"}</span>
+              <Button variant="ghost" size="icon" className="size-6" onClick={zoomOut} disabled={scale <= 0.25}><MinusIcon className="size-3.5" /></Button>
+              <Button variant="ghost" size="icon" className="size-6" onClick={zoomIn} disabled={scale >= 4}><PlusIcon className="size-3.5" /></Button>
+              <Select value={scale.toString()} onValueChange={(v) => setScale(Number(v))}>
+                <SelectTrigger size="sm" className="h-6! w-auto text-xs"><SelectValue>{Math.round(scale * 100)}%</SelectValue></SelectTrigger>
+                <SelectContent>{ZOOM_OPTIONS.map((opt) => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}</SelectContent>
+              </Select>
+              <div className="mx-0.5 h-4 w-px bg-border" />
+              <Button variant="ghost" size="icon" className="size-6" onClick={handleDownload} title="Download PDF"><DownloadIcon className="size-3.5" /></Button>
+            </>
+          )}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="icon" className="size-6" title="History"><HistoryIcon className="size-3.5" /></Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-96">
+              <HistoryPanel maxHeight="max-h-[32rem]" />
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
       {renderContent()}
       {/* PDF selection toolbar */}

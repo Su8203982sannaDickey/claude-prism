@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import {
   HistoryIcon,
   LoaderIcon,
@@ -7,11 +7,8 @@ import {
   CopyIcon,
   PlusIcon,
   XIcon,
-  FileTextIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
 } from "lucide-react";
-import { useHistoryStore, type SnapshotInfo, type FileDiff } from "@/stores/history-store";
+import { useHistoryStore, type SnapshotInfo } from "@/stores/history-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -62,61 +59,54 @@ function snapshotTypeBadgeColor(message: string): string {
   return "bg-muted text-muted-foreground";
 }
 
-function diffStatusColor(status: string): string {
-  if (status === "added") return "text-green-600 dark:text-green-400";
-  if (status === "deleted") return "text-red-600 dark:text-red-400";
-  return "text-blue-600 dark:text-blue-400";
-}
-
-function diffStatusPrefix(status: string): string {
-  if (status === "added") return "+";
-  if (status === "deleted") return "−";
-  return "~";
-}
-
-// ─── Header (rendered by Sidebar) ───
-
-export function HistoryHeader() {
-  const isLoading = useHistoryStore((s) => s.isLoading);
-  const projectRoot = useDocumentStore((s) => s.projectRoot);
-  const loadSnapshots = useHistoryStore((s) => s.loadSnapshots);
-
-  return (
-    <div className="flex w-full items-center justify-between px-3">
-      <div className="flex items-center gap-2">
-        <HistoryIcon className="size-3.5 text-muted-foreground" />
-        <span className="font-medium text-xs">History</span>
-      </div>
-      <button
-        className="rounded p-1 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
-        onClick={() => projectRoot && loadSnapshots(projectRoot)}
-        title="Refresh"
-      >
-        <RotateCcwIcon className={cn("size-3.5", isLoading && "animate-spin")} />
-      </button>
-    </div>
-  );
-}
 
 // ─── Panel ───
 
-export function HistoryPanel() {
+export function HistoryPanel({ maxHeight }: { maxHeight?: string }) {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const snapshots = useHistoryStore((s) => s.snapshots);
   const isLoading = useHistoryStore((s) => s.isLoading);
   const isRestoring = useHistoryStore((s) => s.isRestoring);
-  const diffResult = useHistoryStore((s) => s.diffResult);
-  const isDiffLoading = useHistoryStore((s) => s.isDiffLoading);
+  const reviewingSnapshot = useHistoryStore((s) => s.reviewingSnapshot);
   const init = useHistoryStore((s) => s.init);
   const loadSnapshots = useHistoryStore((s) => s.loadSnapshots);
   const loadMoreSnapshots = useHistoryStore((s) => s.loadMoreSnapshots);
   const loadDiff = useHistoryStore((s) => s.loadDiff);
+  const startReview = useHistoryStore((s) => s.startReview);
   const restoreSnapshot = useHistoryStore((s) => s.restoreSnapshot);
   const addLabel = useHistoryStore((s) => s.addLabel);
   const removeLabel = useHistoryStore((s) => s.removeLabel);
   const openProject = useDocumentStore((s) => s.openProject);
 
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Compute linear history: when a [restore] snapshot appears,
+  // skip all snapshots between it and the restored target
+  const linearSnapshots = useMemo(() => {
+    const result: SnapshotInfo[] = [];
+    let skipUntilSha: string | null = null;
+
+    for (const snap of snapshots) {
+      if (skipUntilSha) {
+        // Skip until we find the snapshot that was restored to
+        if (snap.id.startsWith(skipUntilSha)) {
+          skipUntilSha = null;
+          result.push(snap);
+        }
+        continue;
+      }
+
+      result.push(snap);
+
+      // If this is a restore snapshot, extract the target SHA and start skipping
+      if (snap.message.startsWith("[restore]")) {
+        const match = snap.message.match(/Restored to ([a-f0-9]+)/);
+        if (match) {
+          skipUntilSha = match[1];
+        }
+      }
+    }
+    return result;
+  }, [snapshots]);
+
   const [labelDialogOpen, setLabelDialogOpen] = useState(false);
   const [labelTargetId, setLabelTargetId] = useState<string | null>(null);
   const [labelValue, setLabelValue] = useState("");
@@ -137,33 +127,37 @@ export function HistoryPanel() {
     }
   }, [projectRoot, isLoading, loadMoreSnapshots]);
 
-  // Double-click to expand and load diff
+  // Double-click to show diff in editor
   const handleDoubleClick = useCallback(
     async (snap: SnapshotInfo) => {
       if (!projectRoot) return;
-      if (expandedId === snap.id) {
-        setExpandedId(null);
+      // Toggle off if already reviewing this snapshot
+      if (reviewingSnapshot?.id === snap.id) {
+        useHistoryStore.getState().stopReview();
         return;
       }
-      setExpandedId(snap.id);
-      // Find parent snapshot (the one right after in the list)
-      const idx = snapshots.findIndex((s) => s.id === snap.id);
-      const parent = snapshots[idx + 1];
+      // Find parent snapshot (the one right after in the linear list)
+      const idx = linearSnapshots.findIndex((s) => s.id === snap.id);
+      const parent = linearSnapshots[idx + 1];
       if (parent) {
         await loadDiff(projectRoot, parent.id, snap.id);
+        startReview(snap);
       }
     },
-    [projectRoot, snapshots, expandedId, loadDiff],
+    [projectRoot, linearSnapshots, reviewingSnapshot, loadDiff, startReview],
   );
 
   const handleRestore = useCallback(
     async (snapshotId: string) => {
       if (!projectRoot) return;
+      // Stop any active review
+      useHistoryStore.getState().stopReview();
       await restoreSnapshot(projectRoot, snapshotId);
-      // Re-open project to fully reload all file contents into editor
+      // Re-open project and reload snapshot list
       await openProject(projectRoot);
+      await loadSnapshots(projectRoot);
     },
-    [projectRoot, restoreSnapshot, openProject],
+    [projectRoot, restoreSnapshot, openProject, loadSnapshots],
   );
 
   const handleAddLabel = useCallback(async () => {
@@ -190,26 +184,38 @@ export function HistoryPanel() {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className={cn("flex flex-col", maxHeight || "h-full")}>
+      {/* Header */}
+      <div className="flex shrink-0 items-center justify-between border-b px-3 py-1.5">
+        <div className="flex items-center gap-2">
+          <HistoryIcon className="size-3.5 text-muted-foreground" />
+          <span className="font-medium text-xs">History</span>
+        </div>
+        <button
+          className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          onClick={() => projectRoot && loadSnapshots(projectRoot)}
+          title="Refresh"
+        >
+          <RotateCcwIcon className={cn("size-3.5", isLoading && "animate-spin")} />
+        </button>
+      </div>
       <div
         ref={scrollRef}
         className="min-h-0 flex-1 overflow-y-auto"
         onScroll={handleScroll}
       >
-        {snapshots.length === 0 && !isLoading ? (
+        {linearSnapshots.length === 0 && !isLoading ? (
           <div className="px-3 py-4 text-center text-[11px] text-muted-foreground">
             No history yet
           </div>
         ) : (
           <div className="py-0.5">
-            {snapshots.map((snap) => (
+            {linearSnapshots.map((snap) => (
               <SnapshotRow
                 key={snap.id}
                 snapshot={snap}
-                isExpanded={expandedId === snap.id}
+                isSelected={reviewingSnapshot?.id === snap.id}
                 isRestoring={isRestoring}
-                diffResult={expandedId === snap.id ? diffResult : null}
-                isDiffLoading={expandedId === snap.id && isDiffLoading}
                 onDoubleClick={() => handleDoubleClick(snap)}
                 onRestore={() => handleRestore(snap.id)}
                 onAddLabel={() => openLabelDialog(snap.id)}
@@ -256,10 +262,8 @@ export function HistoryPanel() {
 
 function SnapshotRow({
   snapshot,
-  isExpanded,
+  isSelected,
   isRestoring,
-  diffResult,
-  isDiffLoading,
   onDoubleClick,
   onRestore,
   onAddLabel,
@@ -267,10 +271,8 @@ function SnapshotRow({
   onCopySha,
 }: {
   snapshot: SnapshotInfo;
-  isExpanded: boolean;
+  isSelected: boolean;
   isRestoring: boolean;
-  diffResult: FileDiff[] | null;
-  isDiffLoading: boolean;
   onDoubleClick: () => void;
   onRestore: () => void;
   onAddLabel: () => void;
@@ -282,93 +284,57 @@ function SnapshotRow({
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
-        <div>
-          <button
-            className={cn(
-              "group flex w-full items-start px-2 py-1 text-left transition-colors",
-              isExpanded ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/50",
-            )}
-            onDoubleClick={onDoubleClick}
-          >
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1">
-                <span
-                  className={cn(
-                    "rounded px-1 py-px text-[10px] leading-tight",
-                    snapshotTypeBadgeColor(snapshot.message),
-                  )}
-                >
-                  {snapshotTypeLabel(snapshot.message)}
-                </span>
-                <span className="text-[10px] text-muted-foreground">
-                  {formatRelativeTime(snapshot.timestamp)}
-                </span>
-              </div>
-
-              {/* Labels */}
-              {snapshot.labels.length > 0 && (
-                <div className="mt-0.5 flex flex-wrap gap-0.5">
-                  {snapshot.labels.map((label) => (
-                    <span
-                      key={label}
-                      className="inline-flex items-center gap-0.5 rounded bg-amber-500/15 px-1 py-px text-[10px] text-amber-600 dark:text-amber-400"
-                    >
-                      <TagIcon className="size-2" />
-                      {label}
-                      <button
-                        className="ml-0.5 rounded-sm opacity-0 hover:text-destructive group-hover:opacity-100"
-                        onClick={(e) => { e.stopPropagation(); onRemoveLabel(label); }}
-                      >
-                        <XIcon className="size-2" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {/* Changed files summary */}
-              {hasFiles && (
-                <div className="mt-0.5 flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                  {isExpanded ? (
-                    <ChevronDownIcon className="size-2.5 shrink-0" />
-                  ) : (
-                    <ChevronRightIcon className="size-2.5 shrink-0" />
-                  )}
-                  <span className="truncate">
-                    {snapshot.changed_files.map((f) => f.split("/").pop()).join(", ")}
-                  </span>
-                </div>
-              )}
-            </div>
-          </button>
-
-          {/* Expanded diff view */}
-          {isExpanded && hasFiles && (
-            <div className="ml-3 border-border border-l pl-2">
-              {isDiffLoading ? (
-                <div className="flex items-center gap-1 py-1 text-[10px] text-muted-foreground">
-                  <LoaderIcon className="size-2.5 animate-spin" />
-                  Loading diff...
-                </div>
-              ) : diffResult ? (
-                <div className="py-0.5">
-                  {diffResult.map((diff) => (
-                    <DiffFileRow key={diff.file_path} diff={diff} />
-                  ))}
-                </div>
-              ) : (
-                <div className="py-0.5">
-                  {snapshot.changed_files.map((filePath) => (
-                    <div key={filePath} className="flex items-center gap-1 px-1 py-0.5 text-[10px] text-muted-foreground">
-                      <FileTextIcon className="size-2.5 shrink-0" />
-                      <span className="truncate">{filePath}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+        <button
+          className={cn(
+            "group flex w-full items-start px-2 py-1.5 text-left transition-colors",
+            isSelected ? "bg-accent" : "hover:bg-accent/50",
           )}
-        </div>
+          onDoubleClick={onDoubleClick}
+        >
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1">
+              <span
+                className={cn(
+                  "rounded px-1 py-px text-[10px] leading-tight",
+                  snapshotTypeBadgeColor(snapshot.message),
+                )}
+              >
+                {snapshotTypeLabel(snapshot.message)}
+              </span>
+              <span className="text-[10px] text-muted-foreground">
+                {formatRelativeTime(snapshot.timestamp)}
+              </span>
+            </div>
+
+            {/* Labels */}
+            {snapshot.labels.length > 0 && (
+              <div className="mt-0.5 flex flex-wrap gap-0.5">
+                {snapshot.labels.map((label) => (
+                  <span
+                    key={label}
+                    className="inline-flex items-center gap-0.5 rounded bg-amber-500/15 px-1 py-px text-[10px] text-amber-600 dark:text-amber-400"
+                  >
+                    <TagIcon className="size-2" />
+                    {label}
+                    <button
+                      className="ml-0.5 rounded-sm opacity-0 hover:text-destructive group-hover:opacity-100"
+                      onClick={(e) => { e.stopPropagation(); onRemoveLabel(label); }}
+                    >
+                      <XIcon className="size-2" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Changed files summary */}
+            {hasFiles && (
+              <div className="mt-0.5 text-[10px] text-muted-foreground truncate">
+                {snapshot.changed_files.map((f) => f.split("/").pop()).join(", ")}
+              </div>
+            )}
+          </div>
+        </button>
       </ContextMenuTrigger>
       <ContextMenuContent>
         <ContextMenuItem onClick={onRestore} disabled={isRestoring}>
@@ -389,165 +355,3 @@ function SnapshotRow({
   );
 }
 
-// ─── Diff File Row ───
-
-function DiffFileRow({ diff }: { diff: FileDiff }) {
-  const [expanded, setExpanded] = useState(false);
-  const fileName = diff.file_path.split("/").pop() || diff.file_path;
-
-  return (
-    <div>
-      <button
-        className="flex w-full items-center gap-1 rounded px-1 py-0.5 text-left text-[10px] transition-colors hover:bg-sidebar-accent/50"
-        onClick={() => setExpanded(!expanded)}
-      >
-        <span className={cn("font-mono font-bold", diffStatusColor(diff.status))}>
-          {diffStatusPrefix(diff.status)}
-        </span>
-        <FileTextIcon className="size-2.5 shrink-0 text-muted-foreground" />
-        <span className="truncate text-muted-foreground">{fileName}</span>
-      </button>
-
-      {expanded && (
-        <div className="mx-1 mb-1 max-h-48 overflow-auto rounded border border-border bg-muted/30 p-1 font-mono text-[9px] leading-relaxed">
-          {renderInlineDiff(diff)}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Inline Diff Renderer ───
-
-function renderInlineDiff(diff: FileDiff) {
-  const oldLines = diff.old_content?.split("\n") ?? [];
-  const newLines = diff.new_content?.split("\n") ?? [];
-
-  if (diff.status === "added") {
-    return (
-      <div>
-        {newLines.slice(0, 50).map((line, i) => (
-          <div key={i} className="bg-green-500/10 text-green-700 dark:text-green-400">
-            <span className="mr-1 select-none text-green-500/50">+</span>{line}
-          </div>
-        ))}
-        {newLines.length > 50 && (
-          <div className="text-muted-foreground">... {newLines.length - 50} more lines</div>
-        )}
-      </div>
-    );
-  }
-
-  if (diff.status === "deleted") {
-    return (
-      <div>
-        {oldLines.slice(0, 50).map((line, i) => (
-          <div key={i} className="bg-red-500/10 text-red-700 dark:text-red-400">
-            <span className="mr-1 select-none text-red-500/50">−</span>{line}
-          </div>
-        ))}
-        {oldLines.length > 50 && (
-          <div className="text-muted-foreground">... {oldLines.length - 50} more lines</div>
-        )}
-      </div>
-    );
-  }
-
-  // Modified: simple line-by-line comparison
-  const maxLen = Math.max(oldLines.length, newLines.length);
-  const diffLines: { type: "ctx" | "del" | "add"; text: string }[] = [];
-  let i = 0;
-  let j = 0;
-
-  // Simple LCS-like comparison: show removed then added for changed regions
-  while (i < oldLines.length || j < newLines.length) {
-    if (i < oldLines.length && j < newLines.length && oldLines[i] === newLines[j]) {
-      diffLines.push({ type: "ctx", text: oldLines[i] });
-      i++;
-      j++;
-    } else {
-      // Collect differing lines
-      const startI = i;
-      const startJ = j;
-      // Advance until we find a common line or exhaust both
-      while (i < oldLines.length && j < newLines.length && oldLines[i] !== newLines[j]) {
-        i++;
-        j++;
-      }
-      // If still not matching, try to find next match
-      if (i < oldLines.length && j < newLines.length) {
-        // Both advanced same amount, output as changes
-      }
-      for (let k = startI; k < i; k++) {
-        diffLines.push({ type: "del", text: oldLines[k] });
-      }
-      for (let k = startJ; k < j; k++) {
-        diffLines.push({ type: "add", text: newLines[k] });
-      }
-      if (i >= oldLines.length && j < newLines.length) {
-        while (j < newLines.length) {
-          diffLines.push({ type: "add", text: newLines[j] });
-          j++;
-        }
-      }
-      if (j >= newLines.length && i < oldLines.length) {
-        while (i < oldLines.length) {
-          diffLines.push({ type: "del", text: oldLines[i] });
-          i++;
-        }
-      }
-    }
-    if (diffLines.length > 100) break;
-  }
-
-  // Trim to show only changed regions with context
-  const relevant: typeof diffLines = [];
-  const CONTEXT = 2;
-  const changedIndices = new Set<number>();
-  diffLines.forEach((line, idx) => {
-    if (line.type !== "ctx") {
-      for (let c = Math.max(0, idx - CONTEXT); c <= Math.min(diffLines.length - 1, idx + CONTEXT); c++) {
-        changedIndices.add(c);
-      }
-    }
-  });
-
-  let lastShown = -1;
-  for (let idx = 0; idx < diffLines.length; idx++) {
-    if (changedIndices.has(idx)) {
-      if (lastShown >= 0 && idx - lastShown > 1) {
-        relevant.push({ type: "ctx", text: "···" });
-      }
-      relevant.push(diffLines[idx]);
-      lastShown = idx;
-    }
-  }
-
-  if (relevant.length === 0) {
-    return <div className="text-muted-foreground">No visible changes</div>;
-  }
-
-  return (
-    <div>
-      {relevant.map((line, i) => (
-        <div
-          key={i}
-          className={cn(
-            line.type === "del" && "bg-red-500/10 text-red-700 dark:text-red-400",
-            line.type === "add" && "bg-green-500/10 text-green-700 dark:text-green-400",
-            line.type === "ctx" && "text-muted-foreground",
-          )}
-        >
-          <span className={cn("mr-1 select-none", {
-            "text-red-500/50": line.type === "del",
-            "text-green-500/50": line.type === "add",
-            "text-muted-foreground/50": line.type === "ctx",
-          })}>
-            {line.type === "del" ? "−" : line.type === "add" ? "+" : " "}
-          </span>
-          {line.text}
-        </div>
-      ))}
-    </div>
-  );
-}

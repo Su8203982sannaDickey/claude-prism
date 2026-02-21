@@ -38,7 +38,6 @@ import { useTheme } from "next-themes";
 import { useDocumentStore, type ProjectFile } from "@/stores/document-store";
 import { cn } from "@/lib/utils";
 import { ZoteroPanel, ZoteroHeader } from "@/components/workspace/zotero-panel";
-import { HistoryPanel, HistoryHeader } from "@/components/workspace/history-panel";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -656,20 +655,6 @@ export function Sidebar() {
                   No sections found
                 </div>
               )}
-            </div>
-          </div>
-        </Panel>
-
-        <PanelResizeHandle className="h-px bg-sidebar-border transition-colors hover:bg-ring data-resize-handle-active:bg-ring" />
-
-        {/* History */}
-        <Panel defaultSize={15} minSize={10}>
-          <div className="flex h-full flex-col">
-            <div className="flex h-8 shrink-0 items-center">
-              <HistoryHeader />
-            </div>
-            <div className="min-h-0 flex-1 overflow-hidden">
-              <HistoryPanel />
             </div>
           </div>
         </Panel>

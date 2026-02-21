@@ -25,6 +25,7 @@ interface HistoryState {
   diffResult: FileDiff[] | null;
   isDiffLoading: boolean;
   isRestoring: boolean;
+  reviewingSnapshot: SnapshotInfo | null;
 
   init: (projectRoot: string) => Promise<void>;
   createSnapshot: (projectRoot: string, message: string) => Promise<SnapshotInfo | null>;
@@ -36,6 +37,8 @@ interface HistoryState {
   restoreSnapshot: (projectRoot: string, snapshotId: string) => Promise<SnapshotInfo>;
   addLabel: (projectRoot: string, snapshotId: string, label: string) => Promise<void>;
   removeLabel: (projectRoot: string, label: string) => Promise<void>;
+  startReview: (snapshot: SnapshotInfo) => void;
+  stopReview: () => void;
   reset: () => void;
 }
 
@@ -48,6 +51,15 @@ export const useHistoryStore = create<HistoryState>()((set, get) => ({
   diffResult: null,
   isDiffLoading: false,
   isRestoring: false,
+  reviewingSnapshot: null,
+
+  startReview: (snapshot) => {
+    set({ reviewingSnapshot: snapshot });
+  },
+
+  stopReview: () => {
+    set({ reviewingSnapshot: null, diffResult: null });
+  },
 
   init: async (projectRoot) => {
     await invoke("history_init", { projectRoot });
@@ -165,5 +177,6 @@ export const useHistoryStore = create<HistoryState>()((set, get) => ({
       diffResult: null,
       isDiffLoading: false,
       isRestoring: false,
+      reviewingSnapshot: null,
     }),
 }));
